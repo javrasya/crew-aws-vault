@@ -1,0 +1,27 @@
+{
+  "name": "crew-aws-vault",
+  "version": "0.1.0",
+  "description": "A crew extension that keeps every agent's AWS credentials fresh through aws-vault",
+  "type": "module",
+  "license": "MIT",
+  "crew": {
+    "protocol": 1,
+    "extension": "./index.mjs",
+    "signals": [
+      "session.starting",
+      "tool.result"
+    ],
+    "holdMs": 300000
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}

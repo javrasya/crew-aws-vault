@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+// A stand-in for aws-vault in the tests: `aws-vault export --format=json <profile>`
+// answers from the script in $FAKE_AWS_VAULT, one step per call (the last
+// repeats), and appends each call's argv and whether AWS_VAULT was set to
+// $FAKE_AWS_VAULT.calls.
+import { appendFileSync, readFileSync } from 'node:fs'
+
+const script = JSON.parse(readFileSync(process.env.FAKE_AWS_VAULT, 'utf8'))
+const log = `${process.env.FAKE_AWS_VAULT}.calls`
+let made = 0
+try {
+  made = readFileSync(log, 'utf8').split('\n').filter(Boolean).length
+} catch {}
+appendFileSync(log, `${JSON.stringify({ argv: process.argv.slice(2), awsVault: process.env.AWS_VAULT ?? null })}\n`)
+const step = script[Math.min(made, script.length - 1)]
+if (step.stderr) process.stderr.write(step.stderr)
+setTimeout(() => {
+  if (step.stdout) process.stdout.write(typeof step.stdout === 'string' ? step.stdout : JSON.stringify(step.stdout))
+  process.exit(step.exit ?? 0)
+}, step.delayMs ?? 0)
