@@ -21,13 +21,21 @@ crew install <path to this folder>
 crew extensions
 ```
 
-To give sessions a profile when the shell that starts them names none, write it to `aws-vault.config.json` in crew's home (read on every start, no reload needed):
+### Set a default profile
+
+Write the profile sessions should use to `aws-vault.config.json` in crew's home (`~/.crew/`, or `$CREW_HOME`):
 
 ```json
 { "profile": "funnel-ai-dev" }
 ```
 
-Then start runs as before, `aws-vault exec <profile> -- crew start <spec>`, or with `AWS_PROFILE` set. Set `AWS_VAULT_BIOMETRICS=1` in the shell that starts crew's daemon to make a keychain prompt a Touch ID tap.
+The extension takes a session's profile from its env, `AWS_VAULT` first, then `AWS_PROFILE`, and only then from this file. Without the file, a session started from a shell that sets neither is left alone: it keeps whatever credentials it was given, and in a pi agent the `aws-vault-refresh` extension then runs aws-vault itself, asking for the keychain in every session. The file is read on every start, so an edit needs no reload.
+
+`aws-vault.json` beside it is the extension's own state (its server's port and token, and each session's profile): don't edit it.
+
+### Then
+
+Start runs as before: `crew start <spec>`, or `aws-vault exec <profile> -- crew start <spec>` to pick a profile for that run. Set `AWS_VAULT_BIOMETRICS=1` in the shell that starts crew's daemon to make a keychain prompt a Touch ID tap.
 
 ## Develop
 
