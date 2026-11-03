@@ -9,7 +9,7 @@
 // needs a restart.
 import { signInText } from './src/aws-vault.mjs'
 import { startServer } from './src/server.mjs'
-import { loadState, saveState } from './src/state.mjs'
+import { loadConfig, loadState, saveState } from './src/state.mjs'
 import { createVault } from './src/vault.mjs'
 
 // Under the manifest's holdMs, so a start's wait on aws-vault ends with our error, not crew's timeout.
@@ -63,7 +63,7 @@ export default async function (crew) {
   const retryToldFor = new Map()
 
   crew.on('session.starting', async ({ session, kind, env }) => {
-    const profile = env.AWS_VAULT ?? env.AWS_PROFILE
+    const profile = env.AWS_VAULT ?? env.AWS_PROFILE ?? loadConfig().profile
     if (!profile || kind === 'tail') return null
     const credentials = await vaultFor(profile).get((prompt) => crew.holding(session, signInText(profile, prompt)))
     // Under `aws-vault exec` the profile is aws-vault's for certain, so the

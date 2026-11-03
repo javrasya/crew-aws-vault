@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { after, test } from 'node:test'
 import { applyReply, cleanUp, creds, fetchCreds, MIN, scratch, sleep, startExtension as start, waitFor } from './harness.mjs'
 
@@ -196,4 +198,17 @@ test('sessions set up before the extension restarts keep their server, and their
   ext.toolResult('1', expired)
   const message = await ext.next((m) => m.type === 'message' && m.session === '1')
   assert.match(message.text, /retry/i)
+})
+
+test("a session that names no profile gets the profile in the extension's config file in crew's home", async () => {
+  const crewHome = scratch()
+  writeFileSync(join(crewHome, 'aws-vault.config.json'), JSON.stringify({ profile: 'configured' }))
+  const ext = await start({ script: [{ stdout: creds('from-config') }], crewHome })
+  const bare = { HOME: '/home/op', AWS_REGION: 'eu-west-1' }
+  const env = applyReply(bare, await ext.starting('1', bare, { harness: 'pi' }))
+  assert.equal(env.PI_AWS_PROFILE, 'crew-aws-vault')
+  assert.equal((await fetchCreds(env)).body.AccessKeyId, 'from-config')
+  assert.deepEqual(ext.calls(), [{ argv: ['export', '--format=json', 'configured'], awsVault: null }])
+
+  assert.ok((await ext.starting('2', { ...bare, AWS_PROFILE: 'mine' })).set.AWS_CONTAINER_CREDENTIALS_FULL_URI.endsWith('/creds/mine'))
 })

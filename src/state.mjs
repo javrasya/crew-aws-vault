@@ -1,6 +1,7 @@
-// What the extension keeps across its own restarts, in crew's home: its
-// server's port and token, which the sessions it set up still carry in their
-// env, and which profile each of those sessions uses.
+// The extension's files in crew's home: the operator's config, and what the
+// extension keeps across its own restarts (its server's port and token, which
+// the sessions it set up still carry in their env, and which profile each of
+// those sessions uses).
 import { randomBytes } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -8,7 +9,24 @@ import { join } from 'node:path'
 
 /** @typedef {{ port: number, token: string, sessions: Record<string, string> }} State */
 
-const file = () => join(process.env.CREW_HOME ?? join(homedir(), '.crew'), 'aws-vault.json')
+const inCrewHome = (name) => join(process.env.CREW_HOME ?? join(homedir(), '.crew'), name)
+const file = () => inCrewHome('aws-vault.json')
+
+/**
+ * The operator's config, `aws-vault.config.json` in crew's home, read afresh
+ * each time so an edit needs no reload: `profile`, the one a session that
+ * names none (no AWS_VAULT, no AWS_PROFILE) gets. Empty when there is none.
+ * @returns {{ profile?: string }}
+ */
+export function loadConfig() {
+  try {
+    const config = JSON.parse(readFileSync(inCrewHome('aws-vault.config.json'), 'utf8'))
+    return typeof config?.profile === 'string' && config.profile ? { profile: config.profile } : {}
+  } catch (e) {
+    if (e.code !== 'ENOENT') console.error(`ignoring ${inCrewHome('aws-vault.config.json')}: ${e.message}`)
+    return {}
+  }
+}
 
 /** @returns {State} */
 export function loadState() {

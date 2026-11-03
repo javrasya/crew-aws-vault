@@ -6,7 +6,7 @@ Without it, `aws-vault exec <profile> -- crew start <spec>` fixes the short-live
 
 ## How it works
 
-- **A credentials server.** The extension serves credentials on `127.0.0.1` the way the container credential provider asks for them. On every `session.starting` (log tails aside) whose env names a profile (`AWS_VAULT`, else `AWS_PROFILE`), it sets `AWS_CONTAINER_CREDENTIALS_FULL_URI` and `AWS_CONTAINER_AUTHORIZATION_TOKEN`, and unsets the keys that would win over them (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_SECURITY_TOKEN`, `AWS_CREDENTIAL_EXPIRATION`, `AWS_PROFILE`, `AWS_VAULT`). The AWS CLI and SDKs fetch from it, and fetch again before their credentials run out, so a running agent never needs a restart.
+- **A credentials server.** The extension serves credentials on `127.0.0.1` the way the container credential provider asks for them. On every `session.starting` (log tails aside) whose env names a profile (`AWS_VAULT`, else `AWS_PROFILE`, else the config file's below), it sets `AWS_CONTAINER_CREDENTIALS_FULL_URI` and `AWS_CONTAINER_AUTHORIZATION_TOKEN`, and unsets the keys that would win over them (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_SECURITY_TOKEN`, `AWS_CREDENTIAL_EXPIRATION`, `AWS_PROFILE`, `AWS_VAULT`). The AWS CLI and SDKs fetch from it, and fetch again before their credentials run out, so a running agent never needs a restart.
 - **One refresh for all.** Each profile's credentials come from `aws-vault export --format=json <profile>`, shared by every session: a keychain or SSO prompt happens once, not once per agent. Credentials within 15 minutes of expiry are refreshed behind the fetch that finds them; for expired ones the fetch waits on the refresh for at most 0.8 s, since an SDK gives up on the container endpoint after about a second, and is refused with a 503 past that.
 - **A held start.** A start that has to wait on aws-vault is held (manifest `holdMs`, 5 minutes). If aws-vault opens an SSO sign-in, the agent's row shows its link and code, and a `warn` notice gives it once.
 - **When aws-vault fails**, an `error` notice says why, and aws-vault is not asked again for 2 minutes (`CREW_AWS_VAULT_COOLDOWN_MS`). A session started under `aws-vault exec` (`AWS_VAULT` set) is pointed at the server all the same, and gets credentials once aws-vault works again. One with only `AWS_PROFILE`, which may not be an aws-vault profile at all, starts with the env it was given.
@@ -19,6 +19,12 @@ Without it, `aws-vault exec <profile> -- crew start <spec>` fixes the short-live
 ```
 crew install <path to this folder>
 crew extensions
+```
+
+To give sessions a profile when the shell that starts them names none, write it to `aws-vault.config.json` in crew's home (read on every start, no reload needed):
+
+```json
+{ "profile": "funnel-ai-dev" }
 ```
 
 Then start runs as before, `aws-vault exec <profile> -- crew start <spec>`, or with `AWS_PROFILE` set. Set `AWS_VAULT_BIOMETRICS=1` in the shell that starts crew's daemon to make a keychain prompt a Touch ID tap.
