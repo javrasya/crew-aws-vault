@@ -1,12 +1,13 @@
 {
   "name": "crew-aws-vault",
-  "version": "0.1.0",
-  "description": "A crew extension that keeps every agent's AWS credentials fresh through aws-vault",
+  "version": "0.2.0",
+  "description": "A crew extension that supplies aws-vault keys as a credential source and a Bedrock login, and keeps every agent's AWS credentials fresh through aws-vault",
   "type": "module",
   "license": "MIT",
   "crew": {
     "protocol": 1,
     "extension": "./index.mjs",
+    "exports": "./sources.ts",
     "signals": [
       "session.starting",
       "tool.result"

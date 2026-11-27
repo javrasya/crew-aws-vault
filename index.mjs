@@ -7,6 +7,10 @@
 // profile's credentials and refreshes them through `aws-vault export` as they
 // near expiry. A running agent's SDK fetches again on its own, so it never
 // needs a restart.
+//
+// It also supplies the `aws-vault` credential source its sources.ts declares: crew's broker asks it
+// with credential.mint for an action's need or a harness login bound to it, and the keys go back over
+// this extension's pipe only. That path and the server above share each profile's one vault.
 import { signInText } from './src/aws-vault.mjs'
 import { startServer } from './src/server.mjs'
 import { loadConfig, loadState, saveState } from './src/state.mjs'
@@ -29,6 +33,18 @@ const SHADOWING = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TO
 // ~/.aws/config. Naming one that is not there makes it stand down, so a pi
 // agent neither prompts on its own nor pins static keys over this server's.
 const PI_STAND_DOWN = { PI_AWS_PROFILE: 'crew-aws-vault' }
+
+// Crew's broker renews a copy within 15 minutes of its expiry, so an acquire is answered from the
+// vault's copy only with more left than that.
+const FRESH_MS = 15 * 60 * 1000
+// An export still quiet this long with no SSO sign-in shown waits on a keychain unlock, which
+// aws-vault prints nothing for.
+const QUIET_MS = 3_000
+
+const expiryOf = (c) => {
+  const at = Date.parse(c?.Expiration ?? '')
+  return Number.isNaN(at) ? Number.POSITIVE_INFINITY : at
+}
 
 export default async function (crew) {
   /** @type {Map<string, ReturnType<typeof createVault>>} */
@@ -76,6 +92,27 @@ export default async function (crew) {
     }
     setUp(session, profile)
     return { set: { ...server.envFor(profile), ...PI_STAND_DOWN }, unset: SHADOWING }
+  })
+
+  crew.source('aws-vault', async ({ profile }, { reason, holding }) => {
+    if (typeof profile !== 'string' || !profile) throw new Error(`no aws-vault profile to export: ${JSON.stringify(profile)}`)
+    const vault = vaultFor(profile)
+    let told = false
+    const tell = (prompt) => {
+      told = true
+      holding(signInText(profile, prompt))
+    }
+    const quiet = setTimeout(() => told || holding('waiting on aws-vault'), QUIET_MS)
+    try {
+      let credentials = reason === 'acquire' ? await vault.get(tell) : undefined
+      if (!credentials || expiryOf(credentials) - Date.now() <= FRESH_MS) credentials = await vault.fresh(tell)
+      if (!credentials) throw new Error(vault.failure() ?? `aws-vault export ${profile} gave no credentials`)
+      if (!credentials.SessionToken) throw new Error(`aws-vault export ${profile} gave no session token`)
+      const expiry = expiryOf(credentials)
+      return { accessKeyId: credentials.AccessKeyId, secretAccessKey: credentials.SecretAccessKey, sessionToken: credentials.SessionToken, ...(Number.isFinite(expiry) && { expiresAt: credentials.Expiration }) }
+    } finally {
+      clearTimeout(quiet)
+    }
   })
 
   crew.on('tool.result', async ({ session, error, output }) => {

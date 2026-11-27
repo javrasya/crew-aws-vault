@@ -35,6 +35,9 @@ export function createVault(profile, { timeoutMs, cooldownMs, onFailure, onPromp
   let renewedAt = Number.NEGATIVE_INFINITY
   /** After a failed export, no automatic one before this, so a locked keychain is not asked on every start. */
   let cooldownUntil = Number.NEGATIVE_INFINITY
+  /** Why the last export failed, until one succeeds. */
+  /** @type {string | undefined} */
+  let lastFailure
   /** The sign-in the refresh in flight waits on, once aws-vault has printed it. */
   /** @type {Prompt | undefined} */
   let prompt
@@ -56,10 +59,12 @@ export function createVault(profile, { timeoutMs, cooldownMs, onFailure, onPromp
       .then((result) => {
         if ('message' in result) {
           cooldownUntil = Date.now() + cooldownMs
+          lastFailure = result.message
           onFailure?.(result.message)
           return undefined
         }
         cooldownUntil = Number.NEGATIVE_INFINITY
+        lastFailure = undefined
         if (result.credentials.AccessKeyId === credentials?.AccessKeyId) unchangedAt = Date.now()
         credentials = result.credentials
         return credentials
@@ -96,6 +101,19 @@ export function createVault(profile, { timeoutMs, cooldownMs, onFailure, onPromp
       if (!credentials || left <= 0) return refreshFor(onWaitPrompt)
       if (left < REFRESH_WINDOW_MS && now - unchangedAt > SAME_CREDENTIALS_RETRY_MS) void refresh()
       return credentials
+    },
+    /**
+     * Credentials from an export made for this call, or one already in flight, whatever the ones
+     * held claim: what crew's `renew` and `rejected` mints ask for. Undefined when aws-vault could
+     * give none, `failure()` then saying why.
+     * @param {(prompt: Prompt) => void} [onWaitPrompt]
+     */
+    fresh(onWaitPrompt) {
+      return refreshFor(onWaitPrompt)
+    },
+    /** Why the last export failed, cooldown included, or undefined since one succeeded. */
+    failure() {
+      return lastFailure
     },
     /**
      * After AWS refused these credentials as expired: credentials other than
