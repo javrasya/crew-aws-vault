@@ -102,6 +102,13 @@ export async function startExtension({ script, env = {}, crewHome = scratch() })
       if (line.error) throw new Error(line.error)
       return line.reply
     },
+    /** The extension's reply line to a credential.mint of the aws-vault source for `profile`, with its holding lines. */
+    async mint(profile, reason = 'acquire') {
+      const id = ++nextId
+      send({ type: 'signal', id, signal: 'credential.mint', payload: { source: 'aws-vault', inputs: { profile }, need: { key: 'w/aws', kind: 'aws', scope: null }, reason, run: 'run_1' } })
+      const line = await next((m) => m.type === 'reply' && m.id === id, 30_000)
+      return { ...line, holding: lines.filter((m) => m.type === 'holding' && m.mint === id).map((m) => m.why) }
+    },
     /** A failed shell call's tool.result for `session`; `extra` overrides the rest of it. */
     toolResult(session, output, extra = {}) {
       send({ type: 'tool.result', session, agent: null, harness: 'claude', tool: 'Bash', input: 'aws s3 ls', error: true, output, ...extra })
